@@ -3,8 +3,8 @@ name: Build Wisp for Windows
 on:
   push:
     tags:
-      - 'v*'          # Only on new tags: v0.1.0, v1.2.3, etc.
-  workflow_dispatch:      # Allow manual trigger from Actions tab
+      - 'v*'          # Only on new version tags: v0.1.0, v1.2.3...
+  workflow_dispatch:      # Manual trigger from Actions tab (does NOT run on commit push)
 
 permissions:
   contents: write   # needed to create GitHub Release + upload assets
