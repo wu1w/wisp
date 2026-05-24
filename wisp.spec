@@ -59,7 +59,7 @@ slowapi_datas = _collect_data_unchecked('slowapi')
 
 # ── Project root (where wisp.spec lives) ─────────────────────────────
 
-ROOT = Path.spec or Path.cwd()
+ROOT = Path.cwd()
 
 # ── Additional data files to bundle ──────────────────────────────────
 
