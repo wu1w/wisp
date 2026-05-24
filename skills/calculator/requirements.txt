@@ -1,0 +1,2 @@
+# Calculator Skill — No external dependencies
+# Standard library only (math, json, sys, argparse)

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wisp Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e6edf3; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+    header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #21262d; margin-bottom: 24px; }
+    header h1 { font-size: 1.4rem; color: #58a6ff; }
+    header a { background: #238636; color: #fff; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
+    header a:hover { background: #2ea043; }
+
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 16px 24px; min-width: 120px; }
+    .stat-card .num { font-size: 2rem; font-weight: 700; color: #58a6ff; }
+    .stat-card .label { font-size: 0.8rem; color: #8b949e; margin-top: 4px; }
+
+    .section-title { font-size: 1rem; color: #8b949e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; }
+    th { background: #1c2128; color: #8b949e; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; font-weight: 600; }
+    td { padding: 10px 14px; border-top: 1px solid #21262d; font-size: 0.875rem; vertical-align: middle; }
+    tr:hover td { background: #1c2128; }
+    tr td:first-child { max-width: 400px; }
+    .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; display: block; }
+    .desc a { color: #58a6ff; text-decoration: none; }
+    .desc a:hover { text-decoration: underline; }
+    .state { font-size: 0.8rem; }
+    .muted { color: #8b949e; font-size: 0.8rem; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #21262d; color: #8b949e; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>⚡ Wisp Dashboard</h1>
+    <a href="/new">+ 新建任务</a>
+  </header>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="num">{{ total }}</div>
+      <div class="label">总任务数</div>
+    </div>
+    {% for status, count in stat_map.items() %}
+    <div class="stat-card">
+      <div class="num">{{ count }}</div>
+      <div class="label">{{ status }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="section-title">最近任务</div>
+  <table>
+    <thead>
+      <tr>
+        <th>描述</th>
+        <th>用户</th>
+        <th>状态</th>
+        <th>工具调用</th>
+        <th>创建时间</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for task in tasks %}
+      <tr>
+        <td><span class="desc"><a href="/tasks/{{ task.id }}">{{ task.description }}</a></span></td>
+        <td><span class="tag">{{ task.user }}</span></td>
+        <td><span class="state">{{ task.state }}</span></td>
+        <td><span class="muted">{{ task.calls }}</span></td>
+        <td><span class="muted">{{ task.age }}</span></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" style="text-align:center;color:#8b949e;padding:32px">暂无任务</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

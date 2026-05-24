@@ -1,0 +1,17 @@
+[Unit]
+Description=Wisp AI Agent Worker
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/wisp
+EnvironmentFile=/home/ubuntu/wisp/.env
+ExecStart=/home/ubuntu/wisp/.venv/bin/python -m src.services.worker
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

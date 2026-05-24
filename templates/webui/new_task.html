@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新建任务 — Wisp</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e6edf3; min-height: 100vh; }
+    .container { max-width: 640px; margin: 0 auto; padding: 20px; }
+    a { color: #58a6ff; text-decoration: none; }
+    .back { display: inline-block; margin-bottom: 16px; font-size: 0.875rem; color: #8b949e; }
+
+    h1 { font-size: 1.3rem; margin-bottom: 24px; }
+
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-size: 0.85rem; color: #8b949e; margin-bottom: 6px; }
+    input[type="text"], textarea { width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; padding: 10px 12px; font-size: 0.9rem; font-family: inherit; }
+    input[type="text"]:focus, textarea:focus { outline: none; border-color: #58a6ff; }
+    textarea { resize: vertical; min-height: 100px; }
+    .hint { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
+
+    .btn { background: #238636; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+    .btn:hover { background: #2ea043; }
+    .btn:active { background: #238636; }
+
+    .error-msg { background: #3d1c1c; border: 1px solid #f85149; color: #f85149; padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back">← 返回仪表盘</a>
+  <h1>新建任务</h1>
+
+  {% if request.query_params.get('error') %}
+  <div class="error-msg">请填写任务描述</div>
+  {% endif %}
+
+  <form method="POST" action="/submit">
+    <div class="form-group">
+      <label for="user_id">用户 ID（可选）</label>
+      <input type="text" id="user_id" name="user_id" placeholder="anonymous">
+      <div class="hint">留空则使用 anonymous</div>
+    </div>
+    <div class="form-group">
+      <label for="description">任务描述 *</label>
+      <textarea id="description" name="description" placeholder="例如：读取文件 /tmp/test.txt 并告诉我内容" required></textarea>
+    </div>
+    <button type="submit" class="btn">提交任务</button>
+  </form>
+</div>
+</body>
+</html>

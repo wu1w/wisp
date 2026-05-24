@@ -1,0 +1,28 @@
+name: "Advanced Calculator"
+version: "1.0.0"
+author: "wisp-community"
+description: "高精度数学计算器，支持加减乘除、幂运算、开方、三角函数、对数、表达式解析。当用户需要数学计算时调用此工具。"
+
+tool_schema:
+  name: "advanced_calculator"
+  description: "高精度数学计算。支持的运算：+ - * / ** // % 以及 pow, sqrt, sin, cos, tan, log, log10, exp。注意：三角函数输入为弧度制。"
+  parameters:
+    type: "object"
+    properties:
+      expression:
+        type: "string"
+        description: "数学表达式，如 '2**3 + sqrt(16)' 或 'sin(3.14159/2)'"
+      precision:
+        type: "integer"
+        description: "小数精度位数（默认 10 位）"
+        default: 10
+
+required: ["expression"]
+
+runtime:
+  python_version: "3.11"
+
+limits:
+  timeout: 30
+  network: false
+  memory: "256m"

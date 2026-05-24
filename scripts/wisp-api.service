@@ -1,0 +1,17 @@
+[Unit]
+Description=Wisp API Server
+After=network.target postgresql.service redis.service minio.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/wisp
+EnvironmentFile=/home/ubuntu/wisp/.env
+ExecStart=/home/ubuntu/wisp/.venv/bin/python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

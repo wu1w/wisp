@@ -1,0 +1,51 @@
+# ── Secrets & Config ─────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+config/secrets.yaml
+
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# ── Virtual Env ──────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+
+# ── IDE ─────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Proprietary Build Scripts（本地执行，不上传）─────────────────────
+scripts/compile_proprietary.py
+scripts/compile_proprietary.sh
+setup_proprietary.py
+
+# ── Cython 源码（闭源，严禁上传）────────────────────────────────────
+# .so 编译产物（不含源码）可以进 git
+# .pyx / .c / .html 是 Cython 生成的中间文件，严禁上传
+src/core/proprietary/*.pyx
+src/core/proprietary/*.c
+src/core/proprietary/*.html
+
+# ── Temporary ────────────────────────────────────────────────────
+*.tmp
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/

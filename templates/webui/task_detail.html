@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务详情 — Wisp</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e6edf3; min-height: 100vh; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { display: inline-block; margin-bottom: 16px; font-size: 0.875rem; color: #8b949e; }
+    .back:hover { color: #58a6ff; }
+
+    .task-header { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+    .task-header h1 { font-size: 1.2rem; margin-bottom: 12px; word-break: break-all; }
+    .meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.85rem; color: #8b949e; }
+    .meta-item { background: #21262d; padding: 4px 10px; border-radius: 4px; }
+
+    .section-title { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; margin-top: 24px; }
+
+    .steps { display: flex; flex-direction: column; gap: 8px; }
+    .step { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 14px 16px; }
+    .step-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .step-title { font-size: 0.9rem; font-weight: 600; }
+    .step-meta { font-size: 0.75rem; color: #8b949e; }
+    .step-output { font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.8rem; background: #0d1117; border-radius: 4px; padding: 10px; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; color: #c9d1d9; }
+    .step-error { color: #f85149; font-size: 0.85rem; margin-top: 6px; }
+    .state-done { color: #3fb950; }
+    .state-running { color: #58a6ff; }
+    .state-pending { color: #d29922; }
+    .state-dead { color: #f85149; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back">← 返回仪表盘</a>
+
+  <div class="task-header">
+    <h1>{{ task.description }}</h1>
+    <div class="meta">
+      <span class="meta-item">ID: {{ task.id }}</span>
+      <span class="meta-item">用户: {{ task.user }}</span>
+      <span class="meta-item">{{ task.state }}</span>
+      <span class="meta-item">工具调用: {{ task.calls }}</span>
+      <span class="meta-item">{{ task.age }}</span>
+    </div>
+  </div>
+
+  <div class="section-title">执行步骤</div>
+  <div class="steps">
+    {% for step in steps %}
+    <div class="step">
+      <div class="step-header">
+        <span class="step-title">
+          步骤 {{ step.seq }}:
+          {% if step.tool %}{{ step.tool }}{% else %}初始化{% endif %}
+          <span class="step-meta"> ({{ step.attempt }})</span>
+        </span>
+        <span class="step-meta">
+          <span class="state-{{ step.state }}">{{ step.state.upper() }}</span>
+          {% if step.heartbeat != '—' %} · 心跳 {{ step.heartbeat }}{% endif %}
+          · {{ step.age }}
+        </span>
+      </div>
+      {% if step.output %}
+      <div class="step-output">{{ step.output }}</div>
+      {% endif %}
+      {% if step.error %}
+      <div class="step-error">❌ {{ step.error }}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div style="color:#8b949e;padding:16px">暂无步骤记录</div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>

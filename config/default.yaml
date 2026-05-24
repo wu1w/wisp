@@ -1,0 +1,140 @@
+# Wisp 默认配置
+# 优先级: 环境变量 > config/default.yaml > 此文件默认值
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+
+database:
+  host: "${DATABASE_HOST}"
+  port: 5432
+  name: "wisp"
+  user: "${DATABASE_USER}"
+  password: "${DATABASE_PASSWORD}"
+  pool_size: 20
+  max_overflow: 10
+
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: "${REDIS_PASSWORD}"
+
+object_storage:
+  provider: "minio"              # minio | s3
+  endpoint: "localhost:9000"
+  access_key: "${MINIO_ACCESS_KEY}"
+  secret_key: "${MINIO_SECRET_KEY}"
+  secure: false                  # 本地开发用 HTTP
+  bucket: "wisp"
+  region: "us-east-1"
+
+file_limits:
+  max_file_size_mb: 500          # 单文件上限
+  max_task_total_mb: 2048        # 单任务总文件上限
+  allowed_extensions:
+    - ".py"
+    - ".js"
+    - ".md"
+    - ".csv"
+    - ".json"
+    - ".txt"
+    - ".zip"
+    - ".pdf"
+    - ".sh"
+    - ".yaml"
+    - ".yml"
+    - ".toml"
+  chunk_size_mb: 5               # 分片上传块大小
+  presigned_url_expiry_minutes: 5
+
+validation:
+  magic_number_check: true
+  async_validation: true
+  clamav_enabled: false
+
+sandbox:
+  image: "wisp-worker:latest"
+  cpu: 1
+  memory_mb: 512
+  network: "none"
+  tmpfs_mb: 10
+  max_timeout_seconds: 300
+
+worker:
+  heartbeat_interval_seconds: 10
+  step_ttl_seconds: 300
+  max_attempts: 3
+
+agent:
+  max_tool_calls: 50
+  default_prompt_version: "v1.0.0"
+
+llm:
+  # Wisp 多供应商配置
+  default_provider: "minimax"
+
+  # 模型配置档位（Agent 通过 profile 选择）
+  profiles:
+    coding:
+      provider: "minimax"
+      model: "MiniMax-M2.7"
+      temperature: 0.1
+      max_tokens: 4096
+      fallback_provider: "openai"
+    chatting:
+      provider: "ollama"
+      model: "llama3"
+      temperature: 0.7
+      max_tokens: 2048
+    cheap:
+      provider: "openai"
+      model: "gpt-4o-mini"
+      temperature: 0.3
+      max_tokens: 4096
+
+  # Embedding: 通过 EmbeddingFactory 动态加载 Provider
+  embedding:
+    # Provider 链（按顺序尝试，第一个成功即返回）
+    chain:
+      - minimax       # 高质量，1024维，有免费额度（推荐）
+      - siliconflow   # 备选，免费额度（384维）
+      - openai        # OpenAI text-embedding-3-small（1536维）
+
+  # 供应商凭证（仅在此引用 Key，不在代码中硬编码）
+  providers:
+    minimax:
+      api_key: "${MINIMAX_API_KEY}"
+      base_url: "https://api.minimaxi.com/v1"
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      base_url: "https://api.openai.com/v1"
+    anthropic:
+      api_key: "${ANTHROPIC_API_KEY}"
+    ollama:
+      base_url: "http://localhost:11434"
+    siliconflow:
+      api_key: "${SILICONFLOW_API_KEY}"
+
+memory:
+  dedupe_key: "wisp-dedupe-v1"
+  normalize_max_chars: 10000
+  search_top_k: 5
+
+tracing:
+  enabled: true
+  service_name: "wisp"
+  otlp_endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT}"
+
+approval:
+  webhook_url: "${APPROVAL_WEBHOOK_URL}"
+  expiry_hours: 24
+
+versioning:
+  enabled: true
+  base_path: "/home/ubuntu/workspace/.versions"
+
+rate_limit:
+  requests_per_minute: 60
+  burst: 10

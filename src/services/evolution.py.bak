@@ -1,0 +1,506 @@
+"""
+Evolution Engine — Prompt 自动进化引擎（Level 2）。
+
+功能：
+- 记录任务执行结果与使用的 Prompt Profile
+- 分析 Prompt Segment 效果（哪些片段导致成功/失败）
+- 生成改进建议（通过 LLM 推理）
+- Human-in-the-loop：生成进化提案，需人工审批后才应用
+
+不负责：
+- 直接修改 Prompt（必须人工审批）
+- 保证进化后的 Prompt 一定更好（最终责任在审批者）
+
+使用方式：
+    evolution = EvolutionEngine()
+
+    # 记录任务结果
+    await evolution.record_outcome(
+        task_id=task_id,
+        profile="coding",
+        success=True,
+        tool_calls=5,
+        error_count=0,
+        reflection_summary="...",
+    )
+
+    # 生成进化提案（不自动应用）
+    proposal = await evolution.propose_evolution()
+    if proposal.approved:
+        await evolution.apply_proposal(proposal)
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+import structlog
+
+logger = structlog.get_logger(__name__)
+
+
+# ── 数据结构 ─────────────────────────────────────────────────────
+
+@dataclass
+class OutcomeRecord:
+    """单次任务执行记录。"""
+
+    task_id: str
+    profile: str  # coding | chatting | cheap
+    success: bool
+    tool_calls: int
+    error_count: int
+    reflection_summary: str | None
+    latency_seconds: float
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass
+class SegmentAnalysis:
+    """单个 Prompt Segment 的效果分析。"""
+
+    segment_name: str
+    sample_size: int
+    success_rate: float
+    avg_tool_calls: float
+    avg_latency: float
+    issues: list[str]  # 发现的潜在问题
+
+
+@dataclass
+class EvolutionProposal:
+    """进化提案（需人工审批后才应用）。"""
+
+    proposal_id: str
+    created_at: datetime
+    target_version: str  # 当前版本，如 "v2.0"
+    new_version: str     # 建议的新版本，如 "v2.1"
+    changes: list[SegmentChange]
+    rationale: str       # 改动理由
+    analysis_summary: str  # 分析摘要
+    approved: bool = False
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+
+    @staticmethod
+    def new_proposal_id() -> str:
+        return f"ev-{uuid.uuid4().hex[:8]}"
+
+
+@dataclass
+class SegmentChange:
+    """单个 Segment 的改动描述。"""
+
+    segment_name: str  # base | coding | chatting | cheap
+    change_type: str  # improve | remove | add | rewrite
+    before_excerpt: str
+    after_excerpt: str
+    reason: str
+
+
+# ── Evolution Engine ─────────────────────────────────────────────
+
+_MAX_OUTCOMES = 200  # 保留最近 N 条记录
+
+
+class EvolutionEngine:
+    """
+    Prompt 进化引擎。
+
+    设计原则：
+    - 不自动修改任何 Prompt，所有提案需人工审批
+    - 记录足够的样本后才建议进化（sample_size >= 10）
+    - 每次进化基于数据，而非直觉
+    """
+
+    def __init__(self) -> None:
+        self._outcomes: list[OutcomeRecord] = []
+        self._pending_proposals: list[EvolutionProposal] = []
+        self._approved_proposals: list[EvolutionProposal] = []
+
+    # ── 记录 ─────────────────────────────────────────────────
+
+    async def record_outcome(self, **kwargs: Any) -> None:
+        """
+        记录一次任务执行结果。
+
+        参数：
+            task_id: 任务 ID
+            profile: 使用的 Prompt Profile
+            success: 是否成功
+            tool_calls: 工具调用次数
+            error_count: 错误次数
+            reflection_summary: 反思摘要（如果有）
+            latency_seconds: 耗时
+        """
+        record = OutcomeRecord(**kwargs)
+        self._outcomes.append(record)
+
+        # 保留上限
+        if len(self._outcomes) > _MAX_OUTCOMES:
+            self._outcomes = self._outcomes[-_MAX_OUTCOMES:]
+
+        logger.info(
+            "evolution_outcome_recorded",
+            task_id=record.task_id,
+            profile=record.profile,
+            success=record.success,
+            total_records=len(self._outcomes),
+        )
+
+    # ── 分析 ─────────────────────────────────────────────────
+
+    def _analyze_by_profile(self, profile: str) -> SegmentAnalysis | None:
+        """
+        分析指定 Profile 的历史表现。
+
+        样本不足时返回 None。
+        """
+        records = [r for r in self._outcomes if r.profile == profile]
+        if len(records) < 5:
+            return None
+
+        success_count = sum(1 for r in records if r.success)
+        total_tool_calls = sum(r.tool_calls for r in records)
+        total_latency = sum(r.latency_seconds for r in records)
+
+        analysis = SegmentAnalysis(
+            segment_name=profile,
+            sample_size=len(records),
+            success_rate=success_count / len(records),
+            avg_tool_calls=total_tool_calls / len(records),
+            avg_latency=total_latency / len(records),
+            issues=self._detect_issues(records),
+        )
+
+        return analysis
+
+    @staticmethod
+    def _detect_issues(records: list[OutcomeRecord]) -> list[str]:
+        """从记录中检测潜在问题。"""
+        issues: list[str] = []
+
+        if not records:
+            return issues
+
+        # 高错误率
+        error_rate = sum(r.error_count for r in records) / len(records)
+        if error_rate > 2:
+            issues.append(f"High average error count: {error_rate:.1f} errors/task")
+
+        # 高工具调用（可能提示 Prompt 太啰嗦或工具描述不清）
+        avg_calls = sum(r.tool_calls for r in records) / len(records)
+        if avg_calls > 20:
+            issues.append(f"High tool call count: {avg_calls:.1f} calls/task — prompt may be too verbose")
+
+        # 失败任务中的常见问题（通过 reflection_summary 关键词）
+        failed_with_summary = [
+            r.reflection_summary
+            for r in records
+            if not r.success and r.reflection_summary
+        ]
+        if len(failed_with_summary) >= 3:
+            # 简单关键词检测（不引入重型 NLP）
+            summaries_text = " ".join(failed_with_summary).lower()
+            if "vague" in summaries_text or "unclear" in summaries_text:
+                issues.append("Multiple failures mention vague/unclear instructions")
+            if "missing context" in summaries_text or "no enough info" in summaries_text:
+                issues.append("Multiple failures mention missing context")
+
+        return issues
+
+    # ── 进化提案生成（LLM 驱动）────────────────────────────────
+
+    async def propose_evolution(self) -> EvolutionProposal | None:
+        """
+        基于历史数据生成 Prompt 进化提案。
+
+        流程：
+        1. 分析各 Profile 的表现
+        2. 调用 LLM 生成改进建议
+        3. 构造 EvolutionProposal（未批准状态）
+        4. 返回提案（由调用方展示给人类审批）
+
+        样本不足时返回 None（不生成无根据的提案）。
+        """
+        analyses: list[SegmentAnalysis] = []
+        for profile in ("coding", "chatting", "cheap"):
+            if (analysis := self._analyze_by_profile(profile)) is not None:
+                analyses.append(analysis)
+
+        if not analyses:
+            logger.info("evolution_skip_no_data")
+            return None
+
+        # 取最新版本号
+        current_version = self._guess_current_version()
+        new_version = self._bump_version(current_version)
+
+        # LLM 驱动的改进建议生成
+        rationale, changes = await self._llm_generate_changes(analyses)
+
+        proposal = EvolutionProposal(
+            proposal_id=EvolutionProposal.new_proposal_id(),
+            created_at=datetime.now(UTC),
+            target_version=current_version,
+            new_version=new_version,
+            changes=changes,
+            rationale=rationale,
+            analysis_summary=self._summarize_analyses(analyses),
+        )
+
+        self._pending_proposals.append(proposal)
+
+        logger.info(
+            "evolution_proposal_created",
+            proposal_id=proposal.proposal_id,
+            new_version=new_version,
+            change_count=len(changes),
+        )
+
+        return proposal
+
+    async def _llm_generate_changes(
+        self, analyses: list[SegmentAnalysis]
+    ) -> tuple[str, list[SegmentChange]]:
+        """
+        调用 LLM 生成 Prompt 改进建议。
+
+        使用 cheap profile 进行轻量推理（改进建议不需要强推理模型）。
+        """
+        from src.core.llm.gateway import LLMGateway
+
+        # 构建分析上下文
+        analysis_text = "\n".join(
+            f"## {a.segment_name}\n"
+            f"- Sample size: {a.sample_size}\n"
+            f"- Success rate: {a.success_rate:.1%}\n"
+            f"- Avg tool calls: {a.avg_tool_calls:.1f}\n"
+            f"- Avg latency: {a.avg_latency:.1f}s\n"
+            + (f"- Issues: {'; '.join(a.issues)}\n" if a.issues else "- No major issues detected\n")
+            for a in analyses
+        )
+
+        prompt = f"""You are analyzing AI assistant prompt evolution data. Given the following performance analysis of different prompt segments, suggest targeted improvements.
+
+{analysis_text}
+
+For each segment that has issues, provide:
+1. segment_name: which segment (base, coding, chatting, or cheap)
+2. change_type: improve | remove | add | rewrite
+3. before_excerpt: the current problematic text (max 100 chars)
+4. after_excerpt: your suggested replacement (max 200 chars)
+5. reason: why this change would improve outcomes
+
+Return a JSON array of changes, or empty array if no clear improvements are warranted.
+"""
+
+        try:
+            gateway = LLMGateway()
+            response = await gateway.chat(
+                profile="cheap",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+            )
+            content = response.get("content", "")
+
+            # 尝试解析 JSON
+            changes = self._parse_changes_from_response(content)
+
+            if changes:
+                rationale = "LLM analysis of recent task outcomes suggests targeted prompt improvements."
+            else:
+                rationale = "Analysis complete but no specific changes warranted based on current data."
+                changes = []
+
+            return rationale, changes
+
+        except Exception as exc:
+            logger.warning("evolution_llm_failed", error=str(exc))
+            return f"Analysis attempted but LLM call failed: {exc}", []
+
+    def _parse_changes_from_response(self, content: str) -> list[SegmentChange]:
+        """从 LLM 输出中解析 JSON 改进建议。"""
+        import json
+        import re
+
+        # 尝试从 markdown 代码块中提取 JSON
+        match = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", content)
+        if not match:
+            # 尝试直接解析
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                return []
+        else:
+            try:
+                data = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                return []
+
+        changes: list[SegmentChange] = []
+        if not isinstance(data, list):
+            return []
+
+        for item in data:
+            if not all(k in item for k in ("segment_name", "change_type", "reason")):
+                continue
+            changes.append(
+                SegmentChange(
+                    segment_name=item["segment_name"],
+                    change_type=item["change_type"],
+                    before_excerpt=item.get("before_excerpt", "")[:100],
+                    after_excerpt=item.get("after_excerpt", "")[:200],
+                    reason=item["reason"],
+                )
+            )
+
+        return changes
+
+    # ── 审批 & 应用 ───────────────────────────────────────────
+
+    async def approve_proposal(
+        self,
+        proposal_id: str,
+        approved_by: str,
+    ) -> bool:
+        """
+        人工审批进化提案。
+
+        审批通过后，提案状态更新为 approved=True，但 Prompt 尚未应用。
+        需要调用 apply_proposal() 才真正写入。
+        """
+        for proposal in self._pending_proposals:
+            if proposal.proposal_id == proposal_id:
+                proposal.approved = True
+                proposal.approved_by = approved_by
+                proposal.approved_at = datetime.now(UTC)
+                logger.info(
+                    "evolution_proposal_approved",
+                    proposal_id=proposal_id,
+                    approved_by=approved_by,
+                )
+                return True
+
+        return False
+
+    async def apply_proposal(self, proposal: EvolutionProposal) -> bool:
+        """
+        应用已审批的进化提案：将新 Prompt 版本注册到 PromptManager。
+
+        这是不可逆操作（PromptManager 保留历史版本，但运行时切换是持久的）。
+        """
+        if not proposal.approved:
+            logger.warning("evolution_proposal_not_approved", proposal_id=proposal.proposal_id)
+            return False
+
+        from src.core.prompts import prompt_manager
+
+        # 构建新版 prompts 字典
+        new_prompts: dict[str, str] = {}
+        for change in proposal.changes:
+            # 提取 segment 内容（简化：直接用 after_excerpt 替换）
+            # 实际实现中，这里应该做更精确的文本替换
+            segment = getattr(prompt_manager, f"_{change.segment_name}", None)
+            if segment is None:
+                continue
+            current_text = segment() if callable(segment) else segment
+            new_text = current_text.replace(change.before_excerpt, change.after_excerpt)
+            if new_text != current_text:
+                new_prompts[change.segment_name] = new_text
+
+        if not new_prompts:
+            logger.info("evolution_no_effective_changes", proposal_id=proposal.proposal_id)
+            return False
+
+        # 补充未变化的 segments
+        current_version_prompts = prompt_manager._versions.get(
+            proposal.target_version, {}
+        )
+        for name in ("base", "coding", "chatting", "cheap"):
+            if name not in new_prompts:
+                new_prompts[name] = current_version_prompts.get(name, "")
+
+        # 注册并激活新版本
+        prompt_manager.register_version(proposal.new_version, new_prompts)
+        prompt_manager.set_active_version(proposal.new_version)
+
+        self._approved_proposals.append(proposal)
+        self._pending_proposals = [
+            p for p in self._pending_proposals if p.proposal_id != proposal.proposal_id
+        ]
+
+        logger.info(
+            "evolution_applied",
+            proposal_id=proposal.proposal_id,
+            new_version=proposal.new_version,
+            changes_applied=len(new_prompts),
+        )
+
+        return True
+
+    # ── 辅助 ─────────────────────────────────────────────────
+
+    def _guess_current_version(self) -> str:
+        """从 PromptManager 猜测当前活动版本。"""
+        try:
+            from src.core.prompts import prompt_manager
+            return prompt_manager._active_version
+        except Exception:
+            return "v2.0"
+
+    @staticmethod
+    def _bump_version(version: str) -> str:
+        """小版本递增：v2.0 → v2.1"""
+        parts = version.lstrip("v").split(".")
+        if len(parts) == 2:
+            major, minor = parts
+            return f"v{major}.{int(minor) + 1}"
+        return f"{version}.1"
+
+    @staticmethod
+    def _summarize_analyses(analyses: list[SegmentAnalysis]) -> str:
+        lines = []
+        for a in analyses:
+            status = "✅" if a.success_rate >= 0.8 and not a.issues else "⚠️"
+            lines.append(
+                f"{status} {a.segment_name}: "
+                f"success_rate={a.success_rate:.0%}, "
+                f"avg_calls={a.avg_tool_calls:.1f}, "
+                + (f"issues={', '.join(a.issues)}" if a.issues else "no issues")
+            )
+        return "\n".join(lines)
+
+    # ── 状态查询 ───────────────────────────────────────────────
+
+    def get_pending_proposals(self) -> list[EvolutionProposal]:
+        """返回所有待审批的提案。"""
+        return list(self._pending_proposals)
+
+    def get_outcome_stats(self) -> dict[str, Any]:
+        """返回当前统计数据（供监控/dashboard 使用）。"""
+        total = len(self._outcomes)
+        if total == 0:
+            return {"total_records": 0}
+
+        by_profile: dict[str, dict[str, Any]] = {}
+        for profile in ("coding", "chatting", "cheap"):
+            records = [r for r in self._outcomes if r.profile == profile]
+            if records:
+                by_profile[profile] = {
+                    "count": len(records),
+                    "success_rate": sum(1 for r in records if r.success) / len(records),
+                    "avg_tool_calls": sum(r.tool_calls for r in records) / len(records),
+                }
+
+        return {
+            "total_records": total,
+            "by_profile": by_profile,
+        }
+
+
+# 全局单例
+evolution_engine = EvolutionEngine()
