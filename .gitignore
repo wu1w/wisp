@@ -43,6 +43,11 @@ src/core/proprietary/*.pyx
 src/core/proprietary/*.c
 src/core/proprietary/*.html
 
+# ── PyInstaller Build ─────────────────────────────────────────────
+dist/
+build/
+*.spec
+
 # ── Temporary ────────────────────────────────────────────────────
 *.tmp
 .cache/

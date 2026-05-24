@@ -1,0 +1,84 @@
+name: Build Wisp for Windows
+
+on:
+  push:
+    tags:
+      - 'v*'          # Only on new tags: v0.1.0, v1.2.3, etc.
+  workflow_dispatch:      # Allow manual trigger from Actions tab
+
+jobs:
+  build:
+    name: Build Windows x64
+    runs-on: windows-latest    # GitHub-hosted Windows Server 2022
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Python setup ───────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      # ── Install dependencies ─────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          # Install project in editable mode to collect all deps
+          pip install -e . --no-build-isolation
+
+      # ── Verify hooks exist ─────────────────────────────────────
+      - name: List PyInstaller hooks
+        run: |
+          echo "=== hooks/ ==="
+          dir hooks /b 2>nul || ls hooks/ 2>/dev/null
+          echo "=== wisp.spec ==="
+          if exist wisp.spec (echo OK) else (echo MISSING)
+          echo "=== src/main.py ==="
+          if exist src\main.py (echo OK) else (echo MISSING)
+
+      # ── Build with PyInstaller ─────────────────────────────────
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller wisp.spec --clean --noconfirm
+        shell: cmd
+
+      # ── Smoke test ─────────────────────────────────────────────
+      - name: Test executable (smoke test)
+        run: |
+          echo "=== Checking exe exists ==="
+          if exist dist\wisp\wisp.exe (
+            echo "wisp.exe found"
+            echo "=== File size ==="
+            powershell -Command "(Get-Item dist\wisp\wisp.exe).Length / 1MB"
+          ) else (
+            echo "ERROR: wisp.exe not found"
+            dir dist /s /b
+            exit /b 1
+          )
+
+      # ── Upload artifact ─────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wisp-windows-x64-${{ github.ref_name }}
+          path: dist/wisp/wisp.exe
+          retention-days: 30
+
+      # ── Create Release on tag ───────────────────────────────────
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/wisp/wisp.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
