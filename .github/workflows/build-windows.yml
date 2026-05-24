@@ -57,23 +57,22 @@ jobs:
       # ── Smoke test ─────────────────────────────────────────────
       - name: Test executable (smoke test)
         run: |
-          if not exist dist\wisp\wisp.exe (
-            echo "ERROR: wisp.exe not found in dist"
-            dir dist /s /b 2>nul
+          if (!(Test-Path dist\wisp\wisp.exe)) {
+            Write-Host "ERROR: wisp.exe not found"
+            Get-ChildItem dist -Recurse -Name
             exit /b 1
-          )
-          echo "wisp.exe found"
-          for %%F in (dist\wisp\wisp.exe) do echo Size: %%~zF bytes
-
-          echo ""
-          echo "Running --version..."
+          }
+          Write-Host "wisp.exe found"
+          $size = (Get-Item dist\wisp\wisp.exe).Length
+          Write-Host "Size: $size bytes"
+          Write-Host ""
+          Write-Host "Running --version..."
           dist\wisp\wisp.exe --version
-          if errorlevel 1 (
-            echo "ERROR: --version returned non-zero exit code"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: --version failed"
             exit /b 1
-          ) else (
-            echo "SUCCESS"
-          )
+          }
+          Write-Host "SUCCESS"
 
       # ── Upload artifact ─────────────────────────────────────────
       - name: Upload artifact
