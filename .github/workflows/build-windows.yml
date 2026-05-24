@@ -34,38 +34,19 @@ jobs:
       # for the CLI build — they are server-side only.
       - name: Install Wisp core dependencies
         run: |
-          pip install ^
-            fastapi ^
-            uvicorn[standard] ^
-            httpx ^
-            asyncpg ^
-            sqlalchemy[asyncio] ^
-            alembic ^
-            redis ^
-            boto3 ^
-            minio ^
-            pyyaml ^
-            pydantic ^
-            pydantic-settings ^
-            python-dotenv ^
-            python-multipart ^
-            structlog ^
-            opentelemetry-api ^
-            opentelemetry-sdk ^
-            opentelemetry-instrumentation-fastapi ^
-            prometheus-fastapi-instrumentator ^
-            slowapi ^
-            pydantic[email]
+          pip install -r requirements-windows.txt
 
       # ── Verify hooks exist ─────────────────────────────────────
       - name: List PyInstaller hooks
         run: |
-          echo "=== hooks/ ==="
-          dir hooks /b 2>nul || ls hooks/ 2>/dev/null
-          echo "=== wisp.spec ==="
+          echo === hooks/ ===
+          if exist hooks\hook-asyncpg.py (echo OK: hooks found) else (echo MISSING: hooks not found)
+          dir hooks /b
+          echo === wisp.spec ===
           if exist wisp.spec (echo OK) else (echo MISSING)
-          echo "=== src/main.py ==="
+          echo === src/main.py ===
           if exist src\main.py (echo OK) else (echo MISSING)
+        shell: cmd
 
       # ── Build with PyInstaller ─────────────────────────────────
       - name: Build with PyInstaller
