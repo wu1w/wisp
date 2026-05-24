@@ -22,15 +22,40 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: pyproject.toml
 
-      # ── Install dependencies ─────────────────────────────────────
-      - name: Install Python dependencies
+      # ── Install PyInstaller ─────────────────────────────────────
+      - name: Install PyInstaller
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
-          # Install project in editable mode to collect all deps
-          pip install -e . --no-build-isolation
+
+      # ── Install core dependencies (skip heavy ML libs) ─────────
+      # sentence-transformers / torch / tensorflow are NOT needed
+      # for the CLI build — they are server-side only.
+      - name: Install Wisp core dependencies
+        run: |
+          pip install ^
+            fastapi ^
+            uvicorn[standard] ^
+            httpx ^
+            asyncpg ^
+            sqlalchemy[asyncio] ^
+            alembic ^
+            redis ^
+            boto3 ^
+            minio ^
+            pyyaml ^
+            pydantic ^
+            pydantic-settings ^
+            python-dotenv ^
+            python-multipart ^
+            structlog ^
+            opentelemetry-api ^
+            opentelemetry-sdk ^
+            opentelemetry-instrumentation-fastapi ^
+            prometheus-fastapi-instrumentator ^
+            slowapi ^
+            pydantic[email]
 
       # ── Verify hooks exist ─────────────────────────────────────
       - name: List PyInstaller hooks
