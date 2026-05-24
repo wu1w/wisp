@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 import structlog
@@ -148,3 +150,46 @@ async def health_check_full() -> dict[str, dict[str, str]]:
 
     return components
 
+
+
+# ── CLI Entry Point ──────────────────────────────────────────────
+
+def _get_version() -> str:
+    try:
+        from src import __version__
+        return __version__
+    except Exception:
+        return "0.1.0"
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        prog="wisp",
+        description="Wisp — AI Coding Agent",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  wisp                              # Start server (default port 8000)
+  wisp --port 9000                  # Start on custom port
+  wisp --host 127.0.0.1            # Bind to specific interface
+  wisp --help                       # Show this help
+  wisp --version                    # Show version
+        """,
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Bind address (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8000, help="Port number (default: 8000)")
+    parser.add_argument("--reload", action="store_true", help="Enable auto-reload (dev mode)")
+    parser.add_argument("--version", action="version", version=f"wisp {_get_version()}")
+    parser.add_argument("--workers", type=int, default=1, help="Number of worker processes")
+
+    args = parser.parse_args()
+
+    import uvicorn
+
+    uvicorn.run(
+        "src.main:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        workers=args.workers if not args.reload else 1,
+    )
