@@ -46,7 +46,8 @@ src/core/proprietary/*.html
 # ── PyInstaller Build ─────────────────────────────────────────────
 dist/
 build/
-*.spec
+# wisp.spec is tracked (needed for reproducible builds)
+# Only ignore auto-generated spec files from pyinstaller
 
 # ── Temporary ────────────────────────────────────────────────────
 *.tmp
